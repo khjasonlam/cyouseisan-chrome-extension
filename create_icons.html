@@ -1,71 +1,71 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Icon Generator</title>
-    <style>
-        body { font-family: Arial, sans-serif; padding: 20px; }
-        .icon { display: inline-block; margin: 10px; }
-        canvas { border: 1px solid #ccc; }
-        .download { margin-top: 10px; }
-    </style>
+  <title>Icon Generator</title>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 20px; }
+    .icon { display: inline-block; margin: 10px; }
+    canvas { border: 1px solid #ccc; }
+    .download { margin-top: 10px; }
+  </style>
 </head>
 <body>
-    <h1>Chrome Extension Icon Generator</h1>
-    <p>Right-click on each icon and "Save image as..." to download them as PNG files.</p>
-    
-    <div class="icon">
-        <h3>16x16 Icon</h3>
-        <canvas id="icon16" width="16" height="16"></canvas>
-        <div class="download">
-            <a href="#" onclick="downloadIcon('icon16', 'icon16.png')">Download icon16.png</a>
-        </div>
+  <h1>Chrome Extension Icon Generator</h1>
+  <p>Right-click on each icon and "Save image as..." to download them as PNG files.</p>
+  
+  <div class="icon">
+    <h3>16x16 Icon</h3>
+    <canvas id="icon16" width="16" height="16"></canvas>
+    <div class="download">
+      <a href="#" onclick="downloadIcon('icon16', 'icon16.png')">Download icon16.png</a>
     </div>
-    
-    <div class="icon">
-        <h3>48x48 Icon</h3>
-        <canvas id="icon48" width="48" height="48"></canvas>
-        <div class="download">
-            <a href="#" onclick="downloadIcon('icon48', 'icon48.png')">Download icon48.png</a>
-        </div>
+  </div>
+  
+  <div class="icon">
+    <h3>48x48 Icon</h3>
+    <canvas id="icon48" width="48" height="48"></canvas>
+    <div class="download">
+      <a href="#" onclick="downloadIcon('icon48', 'icon48.png')">Download icon48.png</a>
     </div>
-    
-    <div class="icon">
-        <h3>128x128 Icon</h3>
-        <canvas id="icon128" width="128" height="128"></canvas>
-        <div class="download">
-            <a href="#" onclick="downloadIcon('icon128', 'icon128.png')">Download icon128.png</a>
-        </div>
+  </div>
+  
+  <div class="icon">
+    <h3>128x128 Icon</h3>
+    <canvas id="icon128" width="128" height="128"></canvas>
+    <div class="download">
+      <a href="#" onclick="downloadIcon('icon128', 'icon128.png')">Download icon128.png</a>
     </div>
+  </div>
 
-    <script>
-        function drawIcon(canvasId, size) {
-            const canvas = document.getElementById(canvasId);
-            const ctx = canvas.getContext('2d');
-            
-            // Background
-            ctx.fillStyle = 'green';
-            ctx.fillRect(0, 0, size, size);
-            
-            // "調" for Extension
-            ctx.fillStyle = 'white';
-            ctx.font = `bold ${size * 0.6}px sans-serif`;
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.fillText('調', size / 2, size / 2);
-        }
-        
-        function downloadIcon(canvasId, filename) {
-            const canvas = document.getElementById(canvasId);
-            const link = document.createElement('a');
-            link.download = filename;
-            link.href = canvas.toDataURL();
-            link.click();
-        }
-        
-        // Draw all icons
-        drawIcon('icon16', 16);
-        drawIcon('icon48', 48);
-        drawIcon('icon128', 128);
-    </script>
+  <script>
+    function drawIcon(canvasId, size) {
+      const canvas = document.getElementById(canvasId);
+      const ctx = canvas.getContext('2d');
+      
+      // Background
+      ctx.fillStyle = 'green';
+      ctx.fillRect(0, 0, size, size);
+      
+      // "調" for Extension
+      ctx.fillStyle = 'white';
+      ctx.font = `bold ${size * 0.6}px sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('調', size / 2, size / 2);
+    }
+    
+    function downloadIcon(canvasId, filename) {
+      const canvas = document.getElementById(canvasId);
+      const link = document.createElement('a');
+      link.download = filename;
+      link.href = canvas.toDataURL();
+      link.click();
+    }
+    
+    // Draw all icons
+    drawIcon('icon16', 16);
+    drawIcon('icon48', 48);
+    drawIcon('icon128', 128);
+  </script>
 </body>
 </html> 
