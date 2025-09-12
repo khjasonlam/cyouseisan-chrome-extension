@@ -444,8 +444,8 @@ function calculateTotalTimeMinutes(startTime, endTime) {
   const start = new Date(`2000-01-01T${startTime}`);
   let end = new Date(`2000-01-01T${endTime}`);
   
-  // 深夜をまたぐ場合（開始時刻 > 終了時刻）は翌日として扱う
-  if (start > end) {
+  // 深夜をまたぐ場合（開始時刻 >= 終了時刻）は翌日として扱う
+  if (start >= end) {
     end.setDate(end.getDate() + 1);
   }
   
