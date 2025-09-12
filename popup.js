@@ -202,13 +202,7 @@ function showStatus(message, isSuccess = true) {
  */
 function checkCurrentSite() {
   chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
-    const currentUrl = tabs[0].url;
-    
-    if (isChouseisanSite(currentUrl)) {
-      enableForm();
-    } else {
-      disableForm();
-    }
+    isChouseisanSite(tabs[0].url) ? enableForm() : disableForm();
   });
 }
 
@@ -284,9 +278,7 @@ function handleFormSubmission(e) {
   
   const formData = getFormData();
   
-  if (!validateFormData(formData)) {
-    return;
-  }
+  if (!validateFormData(formData)) return;
   
   sendDataToContentScript(formData);
 }
@@ -304,7 +296,8 @@ function getFormData() {
     startTime: document.getElementById('startTime').value,
     endTime: document.getElementById('endTime').value,
     duration: document.getElementById('duration').value,
-    overwrite: document.getElementById('overwrite').checked
+    overwrite: document.getElementById('overwrite').checked,
+    excludeHolidays: document.getElementById('excludeHolidays').checked
   };
 }
 

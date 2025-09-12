@@ -14,6 +14,12 @@ const JAPANESE_WEEKDAYS = ['日', '月', '火', '水', '木', '金', '土'];
 /** @const {Array<string>} スケジュール送信に必要なフィールド */
 const REQUIRED_FIELDS = ['eventTitle', 'startDate', 'endDate', 'startTime', 'endTime', 'duration'];
 
+/** @const {string} 日本の祝日APIのベースURL */
+const HOLIDAYS_API_BASE_URL = 'https://holidays-jp.shogo82148.com';
+
+/** @type {Object<number, Array<string>>} 祝日データのキャッシュ（年 -> 祝日配列） */
+const holidayCache = {};
+
 // ============================================================================
 // メッセージ処理
 // ============================================================================
@@ -42,7 +48,7 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
  * @param {Object} scheduleData - ポップアップからのスケジュールデータ
  * @param {Function} sendResponse - ポップアップに応答を送信する関数
  */
-function handleScheduleSubmission(scheduleData, sendResponse) {
+async function handleScheduleSubmission(scheduleData, sendResponse) {
   if (!isValidScheduleData(scheduleData)) {
     sendResponse({success: false, message: "無効なデータが送信されました"});
     return;
@@ -55,7 +61,7 @@ function handleScheduleSubmission(scheduleData, sendResponse) {
   }
   
   const formElements = findFormElements();
-  const result = fillFormElements(formElements, scheduleData);
+  const result = await fillFormElements(formElements, scheduleData);
   
   sendResponse(createResponse(result, formElements));
 }
@@ -133,9 +139,9 @@ function findFormElements() {
  * スケジュールデータでフォーム要素を埋める
  * @param {Object} elements - 埋めるフォーム要素
  * @param {Object} scheduleData - 使用するスケジュールデータ
- * @returns {Object} 成功数と総フィールド数を持つ結果オブジェクト
+ * @returns {Promise<Object>} 成功数と総フィールド数を持つ結果オブジェクト
  */
-function fillFormElements(elements, scheduleData) {
+async function fillFormElements(elements, scheduleData) {
   let successCount = 0;
   let totalFields = 0;
   
@@ -155,7 +161,7 @@ function fillFormElements(elements, scheduleData) {
   
   // スケジュールを埋める
   if (elements.kouhoTextarea) {
-    fillScheduleTextarea(elements.kouhoTextarea, scheduleData);
+    await fillScheduleTextarea(elements.kouhoTextarea, scheduleData);
     successCount++;
   }
   totalFields++;
@@ -169,8 +175,8 @@ function fillFormElements(elements, scheduleData) {
  * @param {HTMLTextAreaElement} textarea - 埋めるテキストエリア要素
  * @param {Object} scheduleData - 上書きフラグを含むスケジュールデータ
  */
-function fillScheduleTextarea(textarea, scheduleData) {
-  const formattedSchedule = formatScheduleForChouseisan(scheduleData);
+async function fillScheduleTextarea(textarea, scheduleData) {
+  const formattedSchedule = await formatScheduleForChouseisan(scheduleData);
   
   if (scheduleData.overwrite) {
     // 上書き：既存のコンテンツを置き換え
@@ -202,16 +208,16 @@ function fillInputElement(element, value) {
  * 調整さんテキストエリア用にスケジュールデータをフォーマット
  * スケジュールデータを日本語の日付/時刻形式に変換
  * @param {Object} scheduleData - フォーマットするスケジュールデータ
- * @returns {string} フォーマットされたスケジュール文字列
+ * @returns {Promise<string>} フォーマットされたスケジュール文字列
  */
-function formatScheduleForChouseisan(scheduleData) {
-  const { startDate, endDate, startTime, endTime, duration } = scheduleData;
+async function formatScheduleForChouseisan(scheduleData) {
+  const { startDate, endDate, startTime, endTime, duration, excludeHolidays } = scheduleData;
   const parsedStartDate = new Date(startDate);
   const parsedEndDate = new Date(endDate);
   const parsedDuration = parseInt(duration);
   
   const timeSlots = generateTimeSlots(startTime, endTime, parsedDuration);
-  const scheduleLines = generateScheduleLines(parsedStartDate, parsedEndDate, timeSlots);
+  const scheduleLines = await generateScheduleLines(parsedStartDate, parsedEndDate, timeSlots, excludeHolidays);
   
   return scheduleLines.join('\n');
 }
@@ -253,20 +259,23 @@ function generateTimeSlots(startTime, endTime, durationMinutes) {
  * @param {Date} startDate - 開始日
  * @param {Date} endDate - 終了日
  * @param {Array<string>} timeSlots - 各日付に適用するタイムスロット
- * @returns {Array<string>} フォーマットされたスケジュール行の配列
+ * @param {boolean} excludeHolidays - 土日祝日を除外するかどうか
+ * @returns {Promise<Array<string>>} フォーマットされたスケジュール行の配列
  */
-function generateScheduleLines(startDate, endDate, timeSlots) {
+async function generateScheduleLines(startDate, endDate, timeSlots, excludeHolidays = false) {
   const scheduleLines = [];
   
   if (isSameDate(startDate, endDate)) {
     // 単一日：1日のスロットを生成
-    const dateStr = formatJapaneseDate(startDate);
-    timeSlots.forEach(slot => {
-      scheduleLines.push(`${dateStr} ${slot}`);
-    });
+    if (!excludeHolidays || !(await isWeekendOrHoliday(startDate))) {
+      const dateStr = formatJapaneseDate(startDate);
+      timeSlots.forEach(slot => {
+        scheduleLines.push(`${dateStr} ${slot}`);
+      });
+    }
   } else {
     // 複数日：範囲内の各日のスロットを生成
-    generateMultiDaySchedule(startDate, endDate, timeSlots, scheduleLines);
+    await generateMultiDaySchedule(startDate, endDate, timeSlots, scheduleLines, excludeHolidays);
   }
   
   return scheduleLines;
@@ -288,16 +297,20 @@ function isSameDate(date1, date2) {
  * @param {Date} endDate - 終了日
  * @param {Array<string>} timeSlots - 適用するタイムスロット
  * @param {Array<string>} scheduleLines - スケジュール行を格納する配列
+ * @param {boolean} excludeHolidays - 土日祝日を除外するかどうか
  */
-function generateMultiDaySchedule(startDate, endDate, timeSlots, scheduleLines) {
+async function generateMultiDaySchedule(startDate, endDate, timeSlots, scheduleLines, excludeHolidays = false) {
   const currentDate = new Date(startDate);
   const lastDate = new Date(endDate);
   
   while (currentDate <= lastDate) {
-    const dateStr = formatJapaneseDate(currentDate);
-    timeSlots.forEach(slot => {
-      scheduleLines.push(`${dateStr} ${slot}`);
-    });
+    // 土日祝日除外が有効で、かつ土日祝日の場合はスキップ
+    if (!excludeHolidays || !(await isWeekendOrHoliday(currentDate))) {
+      const dateStr = formatJapaneseDate(currentDate);
+      timeSlots.forEach(slot => {
+        scheduleLines.push(`${dateStr} ${slot}`);
+      });
+    }
     
     // 次の日に移動
     currentDate.setDate(currentDate.getDate() + 1);
@@ -336,4 +349,102 @@ function formatJapaneseDate(date) {
   const day = date.getDate();
   const weekday = getJapaneseWeekday(date);
   return `${month}/${day}(${weekday})`;
+}
+
+/**
+ * 指定された日付が土日または祝日かどうかをチェック
+ * @param {Date} date - チェックする日付
+ * @returns {Promise<boolean>} 土日または祝日の場合true
+ */
+async function isWeekendOrHoliday(date) {
+  const isWeekendDay = isWeekend(date);
+  const isHoliday = await isJapaneseHoliday(date);
+  const result = isWeekendDay || isHoliday;
+  return result;
+}
+
+/**
+ * 指定された日付が土日かどうかをチェック
+ * @param {Date} date - チェックする日付
+ * @returns {boolean} 土日の場合true
+ */
+function isWeekend(date) {
+  const dayOfWeek = date.getDay();
+  return dayOfWeek === 0 || dayOfWeek === 6; // 日曜日(0)または土曜日(6)
+}
+
+/**
+ * 指定された日付が日本の祝日かどうかをチェック
+ * @param {Date} date - チェックする日付
+ * @returns {Promise<boolean>} 祝日の場合true
+ */
+async function isJapaneseHoliday(date) {
+  const dateString = formatDateString(date);
+  const year = date.getFullYear();
+  
+  try {
+    // 年別の祝日リストを取得
+    const holidays = await getHolidaysForYear(year);
+    const isHoliday = holidays.includes(dateString);
+    return isHoliday;
+  } catch (error) {
+    console.warn('祝日データの取得に失敗しました:', error);
+    return false; // エラーの場合は祝日でないとみなす
+  }
+}
+
+/**
+ * 指定された年に対応する祝日リストをAPIから取得
+ * @param {number} year - 年
+ * @returns {Promise<Array<string>>} 祝日の日付文字列配列
+ */
+async function getHolidaysForYear(year) {
+  // キャッシュから取得を試行
+  if (holidayCache[year]) {
+    return holidayCache[year];
+  }
+  
+  try {
+    const response = await fetch(`${HOLIDAYS_API_BASE_URL}/${year}`);
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    // APIレスポンスの形式に応じて祝日リストを抽出
+    let holidays = [];
+    
+    if (data && data.holidays && Array.isArray(data.holidays)) {
+      // holidays-jp API形式: {holidays: [{date: "2024-01-01", name: "元日"}, ...]}
+      holidays = data.holidays.map(holiday => holiday.date);
+    } else if (Array.isArray(data)) {
+      // 配列形式の場合
+      holidays = data.map(holiday => holiday.date || holiday);
+    } else if (typeof data === 'object' && data !== null) {
+      // オブジェクト形式の場合（キーが日付）
+      holidays = Object.keys(data);
+    } else {
+      console.warn(`予期しないAPIレスポンス形式: ${typeof data}`);
+    }
+    
+    // キャッシュに保存
+    holidayCache[year] = holidays;
+    
+    return holidays;
+  } catch (error) {
+    console.error(`祝日データの取得に失敗しました (${year}年):`, error);
+    return []; // エラーの場合は空の配列を返す
+  }
+}
+
+/**
+ * 日付をYYYY-MM-DD形式の文字列にフォーマット
+ * @param {Date} date - フォーマットする日付
+ * @returns {string} YYYY-MM-DD形式の日付文字列
+ */
+function formatDateString(date) {
+  const year = date.getFullYear();
+  const month = (date.getMonth() + 1).toString().padStart(2, '0');
+  const day = date.getDate().toString().padStart(2, '0');
+  return `${year}-${month}-${day}`;
 } 
