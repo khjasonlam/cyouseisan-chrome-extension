@@ -433,6 +433,7 @@ async function getHolidaysForYear(year) {
     return holidays;
   } catch (error) {
     console.error(`祝日データの取得に失敗しました (${year}年):`, error);
+    return []; // エラーの場合は空の配列を返す
   }
 }
 
