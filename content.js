@@ -11,8 +11,11 @@
 /** @const {Array<string>} 日本語の曜日略称 */
 const JAPANESE_WEEKDAYS = ['日', '月', '火', '水', '木', '金', '土'];
 
-/** @const {Array<string>} スケジュール送信に必要なフィールド */
-const REQUIRED_FIELDS = ['eventTitle', 'startDate', 'endDate', 'startTime', 'endTime', 'duration'];
+/** @const {Array<string>} 基本的な必須フィールド（終日イベントでも必要） */
+const BASIC_REQUIRED_FIELDS = ['eventTitle', 'startDate', 'endDate'];
+
+/** @const {Array<string>} 時間関連の必須フィールド（通常イベントでのみ必要） */
+const TIME_REQUIRED_FIELDS = ['startTime', 'endTime', 'duration'];
 
 /** @const {string} 日本の祝日APIのベースURL */
 const HOLIDAYS_API_BASE_URL = 'https://holidays-jp.shogo82148.com';
@@ -81,7 +84,16 @@ function isValidScheduleData(scheduleData) {
  * @returns {Array<string>} 不足しているフィールド名の配列
  */
 function getMissingFields(scheduleData) {
-  return REQUIRED_FIELDS.filter(field => !scheduleData[field]);
+  // 基本的な必須フィールドをチェック
+  const missingBasicFields = BASIC_REQUIRED_FIELDS.filter(field => !scheduleData[field]);
+  
+  // 終日イベントでない場合のみ時間フィールドをチェック
+  if (!scheduleData.fullDay) {
+    const missingTimeFields = TIME_REQUIRED_FIELDS.filter(field => !scheduleData[field]);
+    return [...missingBasicFields, ...missingTimeFields];
+  }
+  
+  return missingBasicFields;
 }
 
 /**
@@ -211,15 +223,21 @@ function fillInputElement(element, value) {
  * @returns {Promise<string>} フォーマットされたスケジュール文字列
  */
 async function formatScheduleForChouseisan(scheduleData) {
-  const { startDate, endDate, startTime, endTime, duration, excludeHolidays } = scheduleData;
+  const { startDate, endDate, startTime, endTime, duration, fullDay, excludeHolidays } = scheduleData;
   const parsedStartDate = new Date(startDate);
   const parsedEndDate = new Date(endDate);
-  const parsedDuration = parseInt(duration);
   
-  const timeSlots = generateTimeSlots(startTime, endTime, parsedDuration);
-  const scheduleLines = await generateScheduleLines(parsedStartDate, parsedEndDate, timeSlots, excludeHolidays);
-  
-  return scheduleLines.join('\n');
+  if (fullDay) {
+    // 終日イベントの場合：時間スロットなしで日付のみ
+    const scheduleLines = await generateFullDaySchedule(parsedStartDate, parsedEndDate, excludeHolidays);
+    return scheduleLines.join('\n');
+  } else {
+    // 通常イベントの場合：時間スロットあり
+    const parsedDuration = parseInt(duration);
+    const timeSlots = generateTimeSlots(startTime, endTime, parsedDuration);
+    const scheduleLines = await generateScheduleLines(parsedStartDate, parsedEndDate, timeSlots, excludeHolidays);
+    return scheduleLines.join('\n');
+  }
 }
 
 /**
@@ -315,6 +333,42 @@ async function generateMultiDaySchedule(startDate, endDate, timeSlots, scheduleL
     // 次の日に移動
     currentDate.setDate(currentDate.getDate() + 1);
   }
+}
+
+/**
+ * 終日イベントのスケジュールを生成
+ * @param {Date} startDate - 開始日
+ * @param {Date} endDate - 終了日
+ * @param {boolean} excludeHolidays - 土日祝日を除外するかどうか
+ * @returns {Promise<Array<string>>} 終日イベントのスケジュール行の配列
+ */
+async function generateFullDaySchedule(startDate, endDate, excludeHolidays = false) {
+  const scheduleLines = [];
+  
+  if (isSameDate(startDate, endDate)) {
+    // 単一日：1日の終日イベントを生成
+    if (!excludeHolidays || !(await isWeekendOrHoliday(startDate))) {
+      const dateStr = formatJapaneseDate(startDate);
+      scheduleLines.push(dateStr);
+    }
+  } else {
+    // 複数日：範囲内の各日の終日イベントを生成
+    const currentDate = new Date(startDate);
+    const lastDate = new Date(endDate);
+    
+    while (currentDate <= lastDate) {
+      // 土日祝日除外が有効で、かつ土日祝日の場合はスキップ
+      if (!excludeHolidays || !(await isWeekendOrHoliday(currentDate))) {
+        const dateStr = formatJapaneseDate(currentDate);
+        scheduleLines.push(dateStr);
+      }
+      
+      // 次の日に移動
+      currentDate.setDate(currentDate.getDate() + 1);
+    }
+  }
+  
+  return scheduleLines;
 }
 
 // ============================================================================

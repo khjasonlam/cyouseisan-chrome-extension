@@ -68,6 +68,8 @@ function setDefaultValues() {
   setDefaultDuration();
   populateTimeDropdowns();
   setDefaultTimes();
+  setInitialTimeFieldRequirements();
+  setInitialPopupMode();
 }
 
 /**
@@ -97,6 +99,39 @@ function setDefaultTimes() {
   
   document.getElementById('startTime').value = `${currentHour.toString().padStart(2, '0')}:00`;
   document.getElementById('endTime').value = `${nextHour.toString().padStart(2, '0')}:00`;
+}
+
+/**
+ * 時間フィールドの初期必須属性を設定
+ * デフォルトでは時間フィールドは必須（終日イベントがチェックされていない状態）
+ */
+function setInitialTimeFieldRequirements() {
+  const startTimeSelect = document.getElementById('startTime');
+  const endTimeSelect = document.getElementById('endTime');
+  const durationSelect = document.getElementById('duration');
+  
+  // デフォルトでは時間フィールドは必須
+  startTimeSelect.setAttribute('required', 'required');
+  endTimeSelect.setAttribute('required', 'required');
+  durationSelect.setAttribute('required', 'required');
+}
+
+/**
+ * ポップアップの初期モードを設定
+ * デフォルトでは時間モード（終日イベントがチェックされていない状態）
+ */
+function setInitialPopupMode() {
+  const body = document.body;
+  const fullDayCheckbox = document.getElementById('fullDay');
+  
+  // デフォルトでは時間モード
+  body.classList.add('time-mode');
+  body.classList.remove('full-day-mode');
+  
+  // 時間フィールドを表示状態に設定
+  const timeFields = document.getElementById('timeFields');
+  timeFields.classList.add('visible');
+  timeFields.classList.remove('hidden');
 }
 
 // ============================================================================
@@ -170,6 +205,60 @@ function createTimeOption(timeValue) {
  */
 function setupEventListeners() {
   scheduleForm.addEventListener('submit', handleFormSubmission);
+  
+  // 終日イベントチェックボックスのイベントリスナー
+  const fullDayCheckbox = document.getElementById('fullDay');
+  fullDayCheckbox.addEventListener('change', handleFullDayToggle);
+}
+
+/**
+ * 終日イベントチェックボックスの切り替えを処理
+ * チェックされた場合は時間フィールドを非表示にし、チェックが外された場合は表示する
+ */
+function handleFullDayToggle() {
+  const fullDayCheckbox = document.getElementById('fullDay');
+  const timeFields = document.getElementById('timeFields');
+  const startTimeSelect = document.getElementById('startTime');
+  const endTimeSelect = document.getElementById('endTime');
+  const durationSelect = document.getElementById('duration');
+  const body = document.body;
+  
+  if (fullDayCheckbox.checked) {
+    // 終日イベントの場合：時間フィールドを非表示
+    timeFields.classList.add('hidden');
+    timeFields.classList.remove('visible');
+    
+    // ポップアップの高さを調整
+    body.classList.add('full-day-mode');
+    body.classList.remove('time-mode');
+    
+    // 時間フィールドの必須属性を削除
+    startTimeSelect.removeAttribute('required');
+    endTimeSelect.removeAttribute('required');
+    durationSelect.removeAttribute('required');
+    
+    // 時間フィールドの値をクリア
+    startTimeSelect.value = '';
+    endTimeSelect.value = '';
+    durationSelect.value = '';
+  } else {
+    // 通常イベントの場合：時間フィールドを表示
+    timeFields.classList.add('visible');
+    timeFields.classList.remove('hidden');
+    
+    // ポップアップの高さを調整
+    body.classList.add('time-mode');
+    body.classList.remove('full-day-mode');
+    
+    // 時間フィールドの必須属性を追加
+    startTimeSelect.setAttribute('required', 'required');
+    endTimeSelect.setAttribute('required', 'required');
+    durationSelect.setAttribute('required', 'required');
+    
+    // デフォルト値を設定
+    setDefaultTimes();
+    setDefaultDuration();
+  }
 }
 
 // ============================================================================
@@ -225,6 +314,18 @@ function isChouseisanSite(url) {
  */
 function enableForm() {
   scheduleForm.style.display = 'block';
+  
+  const body = document.body;
+  body.classList.remove('disabled-mode');
+  
+  const fullDayCheckbox = document.getElementById('fullDay');
+  if (fullDayCheckbox.checked) {
+    body.classList.add('full-day-mode');
+    body.classList.remove('time-mode');
+  } else {
+    body.classList.add('time-mode');
+    body.classList.remove('full-day-mode');
+  }
 }
 
 /**
@@ -233,6 +334,11 @@ function enableForm() {
  */
 function disableForm() {
   scheduleForm.style.display = 'none';
+  
+  const body = document.body;
+  body.classList.add('disabled-mode');
+  body.classList.remove('full-day-mode', 'time-mode');
+  
   showDisabledMessage();
 }
 
@@ -253,7 +359,7 @@ function createDisabledMessage() {
   const disabledMessage = document.createElement('div');
   disabledMessage.style.cssText = `
     text-align: center;
-    padding: 20px;
+    padding: 15px;
     color: #666;
     font-size: 14px;
   `;
@@ -296,6 +402,7 @@ function getFormData() {
     startTime: document.getElementById('startTime').value,
     endTime: document.getElementById('endTime').value,
     duration: document.getElementById('duration').value,
+    fullDay: document.getElementById('fullDay').checked,
     overwrite: document.getElementById('overwrite').checked,
     excludeHolidays: document.getElementById('excludeHolidays').checked
   };
@@ -336,12 +443,20 @@ function validateFormData(formData) {
  * @returns {boolean} すべての必須フィールドに値がある場合true
  */
 function isFormComplete(formData) {
-  return formData.eventTitle && 
-         formData.startDate && 
-         formData.endDate && 
-         formData.startTime && 
-         formData.endTime && 
-         formData.duration;
+  const basicFields = formData.eventTitle && 
+                     formData.startDate && 
+                     formData.endDate;
+  
+  if (formData.fullDay) {
+    // 終日イベントの場合：時間フィールドは不要
+    return basicFields;
+  } else {
+    // 通常イベントの場合：時間フィールドも必要
+    return basicFields && 
+           formData.startTime && 
+           formData.endTime && 
+           formData.duration;
+  }
 }
 
 /**
@@ -360,6 +475,11 @@ function isValidDateRange(formData) {
  * @returns {boolean} 時間範囲が有効な場合true
  */
 function isValidTimeRange(formData) {
+  // 終日イベントの場合：時間範囲の検証は不要
+  if (formData.fullDay) {
+    return true;
+  }
+  
   if (formData.startDate !== formData.endDate) {
     return true; // 異なる日付の場合、時間範囲は重要ではない
   }

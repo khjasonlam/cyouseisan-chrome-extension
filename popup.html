@@ -31,30 +31,40 @@
         </div>
       </div>
       
-      <div class="row">
-        <div class="form-group">
-          <label for="startTime">開始時刻:</label>
-          <select id="startTime" name="startTime" required>
-            <option value="">時刻を選択してください</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label for="endTime">終了時刻:</label>
-          <select id="endTime" name="endTime" required>
-            <option value="">時刻を選択してください</option>
-          </select>
-        </div>
+      <div class="form-group">
+        <label class="checkbox-label">
+          <input type="checkbox" id="fullDay" name="fullDay">
+          <span class="checkmark"></span>
+          終日イベント
+        </label>
       </div>
       
-      <div class="form-group">
-        <label for="duration">時間枠:</label>
-        <select id="duration" name="duration" required>
-          <option value="">時間枠を選択してください</option>
-          <option value="30">30分</option>
-          <option value="60">1時間</option>
-          <option value="90">1時間30分</option>
-          <option value="120">2時間</option>
-        </select>
+      <div id="timeFields" class="time-fields">
+        <div class="row">
+          <div class="form-group">
+            <label for="startTime">開始時刻:</label>
+            <select id="startTime" name="startTime">
+              <option value="">時刻を選択してください</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="endTime">終了時刻:</label>
+            <select id="endTime" name="endTime">
+              <option value="">時刻を選択してください</option>
+            </select>
+          </div>
+        </div>
+        
+        <div class="form-group">
+          <label for="duration">時間枠:</label>
+          <select id="duration" name="duration">
+            <option value="">時間枠を選択してください</option>
+            <option value="30">30分</option>
+            <option value="60">1時間</option>
+            <option value="90">1時間30分</option>
+            <option value="120">2時間</option>
+          </select>
+        </div>
       </div>
       
       <div class="form-group">
