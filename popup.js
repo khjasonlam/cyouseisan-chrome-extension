@@ -1,414 +1,158 @@
-/**
- * 調整さん用Chrome拡張機能
- * スケジュール作成インターフェースのポップアップスクリプト
- * @file popup.js
- */
-
-// ============================================================================
-// 定数
-// ============================================================================
-
-/** @const {string} 調整さんのURLパターンを識別するための文字列 */
+/** 調整さんのURL */
 const CHOUISEISAN_URL = 'chouseisan.com';
-
-/** @const {string} デフォルトの時間枠（分） */
+/** デフォルトの時間枠 */
 const DEFAULT_DURATION = '60';
-
-/** @const {number} ステータスメッセージの表示時間（ミリ秒） */
+/** ステータス表示時間 */
 const STATUS_DISPLAY_TIME = 3000;
 
-// ============================================================================
-// DOM要素
-// ============================================================================
-
-/** @type {HTMLFormElement} メインのスケジュールフォーム要素 */
+/** スケジュールフォーム */
 let scheduleForm;
-
-/** @type {HTMLDivElement} ステータスメッセージ表示要素 */
+/** ステータス表示 */
 let statusDiv;
 
-// ============================================================================
-// 初期化
-// ============================================================================
-
-/**
- * DOM読み込み時にポップアップを初期化
- * 要素の設定、デフォルト値、イベントリスナー、現在のサイト確認を行う
- */
-document.addEventListener('DOMContentLoaded', function() {
-  initializeElements();
+/** ポップアップ初期化 */
+document.addEventListener('DOMContentLoaded', () => {
+  scheduleForm = document.getElementById('scheduleForm');
+  statusDiv = document.getElementById('status');
   setDefaultValues();
   setupEventListeners();
   checkCurrentSite();
 });
 
-// ============================================================================
-// 要素初期化
-// ============================================================================
-
-/**
- * DOM要素の参照を初期化
- * 頻繁に使用される要素をキャッシュしてパフォーマンスを向上
- */
-function initializeElements() {
-  scheduleForm = document.getElementById('scheduleForm');
-  statusDiv = document.getElementById('status');
-}
-
-// ============================================================================
-// デフォルト値設定
-// ============================================================================
-
-/**
- * すべてのフォームのデフォルト値を設定
- * 日付、時間枠、時間ドロップダウン、デフォルト時刻を初期化
- */
-function setDefaultValues() {
-  setDefaultDates();
-  setDefaultDuration();
-  populateTimeDropdowns();
-  setDefaultTimes();
-  setInitialTimeFieldRequirements();
-  setInitialPopupMode();
-}
-
-/**
- * 開始日と終了日のデフォルト値を今日に設定
- */
-function setDefaultDates() {
+/** フォームのデフォルト値を設定 */
+const setDefaultValues = () => {
   const today = new Date().toISOString().split('T')[0];
-  document.getElementById('startDate').value = today;
-  document.getElementById('endDate').value = today;
-}
-
-/**
- * デフォルトの時間枠を1時間（60分）に設定
- */
-function setDefaultDuration() {
-  document.getElementById('duration').value = DEFAULT_DURATION;
-}
-
-/**
- * 現在時刻に基づいてデフォルトの開始時刻と終了時刻を設定
- * 開始時刻：現在の時間、終了時刻：次の時間（両方とも:00分）
- */
-function setDefaultTimes() {
   const now = new Date();
   const currentHour = now.getHours();
   const nextHour = (currentHour + 1) % 24;
-  
+  // 日付フィールド
+  document.getElementById('startDate').value = today;
+  document.getElementById('endDate').value = today;
+  // 時間フィールド
+  populateTimeDropdowns();
   document.getElementById('startTime').value = `${currentHour.toString().padStart(2, '0')}:00`;
   document.getElementById('endTime').value = `${nextHour.toString().padStart(2, '0')}:00`;
-}
+  document.getElementById('duration').value = DEFAULT_DURATION;
+  document.body.classList.add('time-mode');
+  document.getElementById('timeFields').classList.add('visible');
+};
 
-/**
- * 時間フィールドの初期必須属性を設定
- * デフォルトでは時間フィールドは必須（終日イベントがチェックされていない状態）
- */
-function setInitialTimeFieldRequirements() {
-  const startTimeSelect = document.getElementById('startTime');
-  const endTimeSelect = document.getElementById('endTime');
-  const durationSelect = document.getElementById('duration');
-  
-  // デフォルトでは時間フィールドは必須
-  startTimeSelect.setAttribute('required', 'required');
-  endTimeSelect.setAttribute('required', 'required');
-  durationSelect.setAttribute('required', 'required');
-}
-
-/**
- * ポップアップの初期モードを設定
- * デフォルトでは時間モード（終日イベントがチェックされていない状態）
- */
-function setInitialPopupMode() {
-  const body = document.body;
-  const fullDayCheckbox = document.getElementById('fullDay');
-  
-  // デフォルトでは時間モード
-  body.classList.add('time-mode');
-  body.classList.remove('full-day-mode');
-  
-  // 時間フィールドを表示状態に設定
-  const timeFields = document.getElementById('timeFields');
-  timeFields.classList.add('visible');
-  timeFields.classList.remove('hidden');
-}
-
-// ============================================================================
-// 時間ドロップダウン生成
-// ============================================================================
-
-/**
- * 24時間分の00分と30分オプションで時間ドロップダウンを生成
- * 00:00から23:30まで30分間隔でオプションを作成
- */
-function populateTimeDropdowns() {
-  const startTimeSelect = document.getElementById('startTime');
-  const endTimeSelect = document.getElementById('endTime');
-  
-  clearTimeDropdowns(startTimeSelect, endTimeSelect);
-  addTimeOptions(startTimeSelect, endTimeSelect);
-}
-
-/**
- * 時間ドロップダウンの既存オプションをクリアしてプレースホルダーを追加
- * @param {HTMLSelectElement} startSelect - 開始時刻ドロップダウン要素
- * @param {HTMLSelectElement} endSelect - 終了時刻ドロップダウン要素
- */
-function clearTimeDropdowns(startSelect, endSelect) {
-  const placeholder = '<option value="">時刻を選択してください</option>';
+/** 時間ドロップダウンを30分間隔で生成 */
+const populateTimeDropdowns = () => {
+  const startSelect = document.getElementById('startTime');
+  const endSelect = document.getElementById('endTime');
+  const placeholder = '<option value="">時刻を選択</option>';
   startSelect.innerHTML = placeholder;
   endSelect.innerHTML = placeholder;
-}
-
-/**
- * 両方のドロップダウンに時間オプションを追加
- * 各時間の00分と30分バリアントのオプションを作成
- * @param {HTMLSelectElement} startSelect - 開始時刻ドロップダウン要素
- * @param {HTMLSelectElement} endSelect - 終了時刻ドロップダウン要素
- */
-function addTimeOptions(startSelect, endSelect) {
   for (let hour = 0; hour < 24; hour++) {
     const hourStr = hour.toString().padStart(2, '0');
-    
-    // 00分オプションを追加
-    const option00 = createTimeOption(`${hourStr}:00`);
-    startSelect.appendChild(option00.cloneNode(true));
-    endSelect.appendChild(option00);
-    
-    // 30分オプションを追加
-    const option30 = createTimeOption(`${hourStr}:30`);
-    startSelect.appendChild(option30.cloneNode(true));
-    endSelect.appendChild(option30);
+    ['00', '30'].forEach((minutes) => {
+      const timeValue = `${hourStr}:${minutes}`;
+      const option = document.createElement('option');
+      option.value = timeValue;
+      option.textContent = timeValue;
+      startSelect.appendChild(option.cloneNode(true));
+      endSelect.appendChild(option);
+    });
   }
-}
+};
 
-/**
- * 時間オプション要素を作成
- * @param {string} timeValue - HH:MM形式の時間値
- * @returns {HTMLOptionElement} 作成されたオプション要素
- */
-function createTimeOption(timeValue) {
-  const option = document.createElement('option');
-  option.value = timeValue;
-  option.textContent = timeValue;
-  return option;
-}
-
-// ============================================================================
-// イベントリスナー
-// ============================================================================
-
-/**
- * ポップアップのすべてのイベントリスナーを設定
- * 現在はフォーム送信を処理
- */
-function setupEventListeners() {
+/** イベントリスナーを設定 */
+const setupEventListeners = () => {
   scheduleForm.addEventListener('submit', handleFormSubmission);
-  
-  // 終日イベントチェックボックスのイベントリスナー
-  const fullDayCheckbox = document.getElementById('fullDay');
-  fullDayCheckbox.addEventListener('change', handleFullDayToggle);
-  
-  // 開始時刻と終了時刻の変更イベントリスナー
-  const startTimeSelect = document.getElementById('startTime');
-  const endTimeSelect = document.getElementById('endTime');
-  const durationSelect = document.getElementById('duration');
-  
-  startTimeSelect.addEventListener('change', updateDurationOptions);
-  endTimeSelect.addEventListener('change', updateDurationOptions);
-  durationSelect.addEventListener('change', handleDurationChange);
-}
+  document.getElementById('fullDay').addEventListener('change', handleFullDayToggle);
+  document.getElementById('startTime').addEventListener('change', updateDurationOptions);
+  document.getElementById('endTime').addEventListener('change', updateDurationOptions);
+};
 
-/**
- * 終日イベントチェックボックスの切り替えを処理
- * チェックされた場合は時間フィールドを非表示にし、チェックが外された場合は表示する
- */
-function handleFullDayToggle() {
+/** 終日イベントの切り替え処理 */
+const handleFullDayToggle = () => {
   const fullDayCheckbox = document.getElementById('fullDay');
   const timeFields = document.getElementById('timeFields');
-  const startTimeSelect = document.getElementById('startTime');
-  const endTimeSelect = document.getElementById('endTime');
-  const durationSelect = document.getElementById('duration');
-  const body = document.body;
-  
+  const timeFieldIds = ['startTime', 'endTime', 'duration'];
   if (fullDayCheckbox.checked) {
-    // 終日イベントの場合：時間フィールドを非表示
+    // 終日モード
     timeFields.classList.add('hidden');
     timeFields.classList.remove('visible');
-    
-    // ポップアップの高さを調整
-    body.classList.add('full-day-mode');
-    body.classList.remove('time-mode');
-    
-    // 時間フィールドの必須属性を削除
-    startTimeSelect.removeAttribute('required');
-    endTimeSelect.removeAttribute('required');
-    durationSelect.removeAttribute('required');
-    
-    // 時間フィールドの値をクリア
-    startTimeSelect.value = '';
-    endTimeSelect.value = '';
-    durationSelect.value = '';
+    document.body.classList.add('full-day-mode');
+    document.body.classList.remove('time-mode');
+    timeFieldIds.forEach((id) => {
+      const field = document.getElementById(id);
+      field.value = '';
+    });
   } else {
-    // 通常イベントの場合：時間フィールドを表示
+    // 時間指定モード
     timeFields.classList.add('visible');
     timeFields.classList.remove('hidden');
-    
-    // ポップアップの高さを調整
-    body.classList.add('time-mode');
-    body.classList.remove('full-day-mode');
-    
-    // 時間フィールドの必須属性を追加
-    startTimeSelect.setAttribute('required', 'required');
-    endTimeSelect.setAttribute('required', 'required');
-    durationSelect.setAttribute('required', 'required');
-    
-    // デフォルト値を設定
-    setDefaultTimes();
-    setDefaultDuration();
-    
-    // 期間オプションを更新
+    document.body.classList.add('time-mode');
+    document.body.classList.remove('full-day-mode');
+    // デフォルト値をリセット
+    resetTimeFields();
     updateDurationOptions();
   }
-}
+};
 
-// ============================================================================
-// ステータスメッセージ
-// ============================================================================
+/** 時間フィールドをデフォルト値にリセット */
+const resetTimeFields = () => {
+  const now = new Date();
+  const currentHour = now.getHours();
+  const nextHour = (currentHour + 1) % 24;
+  document.getElementById('startTime').value = `${currentHour.toString().padStart(2, '0')}:00`;
+  document.getElementById('endTime').value = `${nextHour.toString().padStart(2, '0')}:00`;
+  document.getElementById('duration').value = DEFAULT_DURATION;
+};
 
-/**
- * ユーザーにステータスメッセージを表示
- * 成功またはエラーメッセージを表示し、指定時間後に自動非表示
- * @param {string} message - 表示するメッセージ
- * @param {boolean} isSuccess - 成功メッセージかどうか（デフォルト: true）
- */
-function showStatus(message, isSuccess = true) {
+/** ステータスメッセージを表示 */
+const showStatus = (message, isSuccess = true) => {
   statusDiv.textContent = message;
   statusDiv.className = `status ${isSuccess ? 'success' : 'error'}`;
   statusDiv.style.display = 'block';
-  
   setTimeout(() => {
     statusDiv.style.display = 'none';
   }, STATUS_DISPLAY_TIME);
-}
+};
 
-// ============================================================================
-// サイト検出
-// ============================================================================
-
-/**
- * 現在のタブが調整さんかどうかを確認し、フォームの状態を更新
- * アクティブタブをクエリし、URLに基づいてフォームを有効/無効にする
- */
-function checkCurrentSite() {
-  chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
-    isChouseisanSite(tabs[0].url) ? enableForm() : disableForm();
+/** 現在のサイトが調整さんかチェック */
+const checkCurrentSite = () => {
+  chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+    const isChouseisan = tabs[0].url?.includes(CHOUISEISAN_URL);
+    isChouseisan ? enableForm() : disableForm();
   });
-}
+};
 
-/**
- * URLに調整さんのドメインが含まれているかチェック
- * @param {string} url - チェックするURL
- * @returns {boolean} URLが調整さん上の場合true
- */
-function isChouseisanSite(url) {
-  return url && url.includes(CHOUISEISAN_URL);
-}
-
-// ============================================================================
-// フォーム状態管理
-// ============================================================================
-
-/**
- * フォームインターフェースを有効化
- * 調整さん上でフォームとタイトルを表示
- */
-function enableForm() {
+/** フォームを有効化 */
+const enableForm = () => {
   scheduleForm.style.display = 'block';
-  
-  const body = document.body;
-  body.classList.remove('disabled-mode');
-  
+  document.body.classList.remove('disabled-mode');
   const fullDayCheckbox = document.getElementById('fullDay');
   if (fullDayCheckbox.checked) {
-    body.classList.add('full-day-mode');
-    body.classList.remove('time-mode');
+    document.body.classList.add('full-day-mode');
+    document.body.classList.remove('time-mode');
   } else {
-    body.classList.add('time-mode');
-    body.classList.remove('full-day-mode');
-    // 時間モードの場合は期間オプションを更新
+    document.body.classList.add('time-mode');
+    document.body.classList.remove('full-day-mode');
     updateDurationOptions();
   }
-}
+};
 
-/**
- * フォームインターフェースを無効化
- * 調整さん以外ではフォームとタイトルを非表示にし、無効メッセージを表示
- */
-function disableForm() {
+/** フォームを無効化 */
+const disableForm = () => {
   scheduleForm.style.display = 'none';
-  
-  const body = document.body;
-  body.classList.add('disabled-mode');
-  body.classList.remove('full-day-mode', 'time-mode');
-  
-  showDisabledMessage();
-}
-
-/**
- * 調整さん以外で無効メッセージを表示
- * 拡張機能の使用方法について情報を提供するメッセージを作成・表示
- */
-function showDisabledMessage() {
-  const disabledMessage = createDisabledMessage();
-  document.querySelector('.container').appendChild(disabledMessage);
-}
-
-/**
- * 無効メッセージ要素を作成
- * @returns {HTMLDivElement} スタイリングされた無効メッセージ要素
- */
-function createDisabledMessage() {
+  document.body.classList.add('disabled-mode');
+  document.body.classList.remove('full-day-mode', 'time-mode');
   const disabledMessage = document.createElement('div');
-  disabledMessage.style.cssText = `
-    text-align: center;
-    padding: 15px;
-    color: #666;
-    font-size: 14px;
-  `;
+  disabledMessage.style.cssText = 'text-align: center; padding: 15px; color: #666; font-size: 14px;';
   disabledMessage.innerHTML = `
     <p>この拡張機能は<strong>調整さん</strong>でのみ動作します</p>
     <p><a href="https://chouseisan.com/" target="_blank">調整さん</a>にアクセスして拡張機能をご利用ください。</p>
   `;
-  return disabledMessage;
-}
+  document.querySelector('.container')?.appendChild(disabledMessage);
+};
 
-// ============================================================================
-// フォーム処理
-// ============================================================================
-
-/**
- * フォーム送信を処理
- * デフォルトのフォーム送信を防止し、データを検証してコンテンツスクリプトに送信
- * @param {Event} e - フォーム送信イベント
- */
-function handleFormSubmission(e) {
+/** フォーム送信処理 */
+const handleFormSubmission = (e) => {
   e.preventDefault();
-  
-  const formData = getFormData();
-  
-  if (!validateFormData(formData)) return;
-  
-  sendDataToContentScript(formData);
-}
-
-/**
- * すべてのフォームデータをオブジェクトに収集
- * @returns {Object} すべてのフィールド値を持つフォームデータオブジェクト
- */
-function getFormData() {
-  return {
+  const formData = {
     eventTitle: document.getElementById('eventTitle').value,
     memo: document.getElementById('memo').value,
     startDate: document.getElementById('startDate').value,
@@ -418,335 +162,111 @@ function getFormData() {
     duration: document.getElementById('duration').value,
     fullDay: document.getElementById('fullDay').checked,
     overwrite: document.getElementById('overwrite').checked,
-    excludeHolidays: document.getElementById('excludeHolidays').checked
+    excludeHolidays: document.getElementById('excludeHolidays').checked,
   };
-}
+  if (!validateFormData(formData)) return;
+  sendDataToContentScript(formData);
+};
 
-// ============================================================================
-// 動的期間フィルタリング
-// ============================================================================
-
-/** @const {boolean} 再帰的な更新を防ぐフラグ */
-let isUpdatingTime = false;
-
-/**
- * 開始時刻と終了時刻から総時間（分）を計算
- * 深夜をまたぐイベントも対応
- * @param {string} startTime - 開始時刻（HH:MM形式）
- * @param {string} endTime - 終了時刻（HH:MM形式）
- * @returns {number} 総時間（分）
- */
-function calculateTotalTimeMinutes(startTime, endTime) {
-  if (!startTime || !endTime) {
-    return 0;
-  }
-  
+/** 時間差を分単位で計算 */
+const calculateTotalTimeMinutes = (startTime, endTime) => {
+  if (!startTime || !endTime) return 0;
   const start = new Date(`2000-01-01T${startTime}`);
   let end = new Date(`2000-01-01T${endTime}`);
-  
-  // 深夜をまたぐ場合（開始時刻 >= 終了時刻）は翌日として扱う
   if (start >= end) {
     end.setDate(end.getDate() + 1);
   }
-  
-  return (end - start) / (1000 * 60); // 分に変換
-}
+  return (end.getTime() - start.getTime()) / (1000 * 60);
+};
 
-/**
- * 利用可能な期間オプションを取得
- * 総時間に基づいて適切な期間のみを返す
- * @param {number} totalMinutes - 総時間（分）
- * @returns {Array<Object>} 利用可能な期間オプションの配列
- */
-function getAvailableDurationOptions(totalMinutes) {
+/** 利用可能な時間枠オプションを取得 */
+const getAvailableDurationOptions = (totalMinutes) => {
   const allOptions = [
     { value: '30', text: '30分' },
     { value: '60', text: '1時間' },
     { value: '90', text: '1時間30分' },
-    { value: '120', text: '2時間' }
+    { value: '120', text: '2時間' },
   ];
-  
-  if (totalMinutes === 0) {
-    return allOptions; // 時間が設定されていない場合はすべて表示
-  }
-  
-  // 総時間以下の期間のみを返す
-  return allOptions.filter(option => parseInt(option.value) <= totalMinutes);
-}
+  return totalMinutes === 0 ? allOptions : allOptions.filter((option) => parseInt(option.value) <= totalMinutes);
+};
 
-/**
- * 期間ドロップダウンを更新
- * 開始時刻と終了時刻に基づいて利用可能な期間のみを表示
- */
-function updateDurationOptions() {
-  if (isUpdatingTime) {
-    return; // 再帰的な更新を防ぐ
-  }
-  
-  const startTimeSelect = document.getElementById('startTime');
-  const endTimeSelect = document.getElementById('endTime');
+/** 時間枠オプションを更新 */
+const updateDurationOptions = () => {
+  const startTime = document.getElementById('startTime').value;
+  const endTime = document.getElementById('endTime').value;
   const durationSelect = document.getElementById('duration');
-  
-  const startTime = startTimeSelect.value;
-  const endTime = endTimeSelect.value;
-  
-  // 現在選択されている期間を保存
   const currentDuration = durationSelect.value;
-  
-  // 総時間を計算
   const totalMinutes = calculateTotalTimeMinutes(startTime, endTime);
-  
-  // 利用可能な期間オプションを取得
   const availableOptions = getAvailableDurationOptions(totalMinutes);
-  
-  // ドロップダウンをクリア
-  durationSelect.innerHTML = '<option value="">時間枠を選択してください</option>';
-  
-  // 利用可能なオプションを追加
-  availableOptions.forEach(option => {
+  durationSelect.innerHTML = '<option value="">時間枠を選択</option>';
+  availableOptions.forEach((option) => {
     const optionElement = document.createElement('option');
     optionElement.value = option.value;
     optionElement.textContent = option.text;
     durationSelect.appendChild(optionElement);
   });
-  
-  // 以前に選択されていた期間がまだ利用可能な場合は復元
-  if (currentDuration && availableOptions.some(option => option.value === currentDuration)) {
+  if (currentDuration && availableOptions.some((option) => option.value === currentDuration)) {
     durationSelect.value = currentDuration;
   } else if (currentDuration) {
-    // 現在の期間が利用不可能な場合のみ、最適な期間を自動選択
-    smartAdjustDurationAndTime();
+    smartAdjustDuration();
   } else {
-    // 期間が選択されていない場合は何もしない（ユーザーが手動で選択するまで待つ）
     durationSelect.value = '';
   }
-}
+};
 
-/**
- * 期間と終了時刻を自動調整
- * 現在の期間が利用不可能な場合のみ、利用可能な期間を選択し、終了時刻を調整
- * デフォルトの1時間が利用可能な場合は優先的に選択
- */
-function smartAdjustDurationAndTime() {
-  const startTimeSelect = document.getElementById('startTime');
-  const endTimeSelect = document.getElementById('endTime');
-  const durationSelect = document.getElementById('duration');
-  
-  const startTime = startTimeSelect.value;
-  const endTime = endTimeSelect.value;
-  
-  if (!startTime || !endTime) {
-    return; // 開始時刻または終了時刻が設定されていない場合は何もしない
-  }
-  
-  // 総時間を計算
+/** 時間枠を自動調整 */
+const smartAdjustDuration = () => {
+  const startTime = document.getElementById('startTime').value;
+  const endTime = document.getElementById('endTime').value;
+  if (!startTime || !endTime) return;
   const totalMinutes = calculateTotalTimeMinutes(startTime, endTime);
-  
-  // 利用可能な期間オプションを取得
   const availableOptions = getAvailableDurationOptions(totalMinutes);
-  
-  if (availableOptions.length === 0) {
-    return; // 利用可能な期間がない場合は何もしない
-  }
-  
-  // 優先順位で期間を選択
-  let selectedDuration;
-  
-  // 1. デフォルトの1時間（60分）が利用可能な場合は優先的に選択
-  if (availableOptions.some(option => option.value === '60')) {
-    selectedDuration = availableOptions.find(option => option.value === '60');
-  } else {
-    // 2. 1時間が利用不可能な場合は最大の利用可能な期間を選択
-    selectedDuration = availableOptions[availableOptions.length - 1];
-  }
-  
-  durationSelect.value = selectedDuration.value;
-  
-  // 終了時刻を調整
-  adjustEndTimeBasedOnDuration(startTime, parseInt(selectedDuration.value));
-}
+  if (availableOptions.length === 0) return;
+  const selectedDuration = availableOptions.some((option) => option.value === '60')
+    ? availableOptions.find((option) => option.value === '60')
+    : availableOptions[availableOptions.length - 1];
+  document.getElementById('duration').value = selectedDuration.value;
+};
 
-/**
- * 選択された期間に基づいて終了時刻を調整
- * 深夜をまたぐ場合も適切に処理
- * @param {string} startTime - 開始時刻（HH:MM形式）
- * @param {number} durationMinutes - 期間（分）
- */
-function adjustEndTimeBasedOnDuration(startTime, durationMinutes) {
-  isUpdatingTime = true; // 再帰的な更新を防ぐ
-  
-  const endTimeSelect = document.getElementById('endTime');
-  
-  const start = new Date(`2000-01-01T${startTime}`);
-  const end = new Date(start.getTime() + durationMinutes * 60000);
-  
-  // 時刻をHH:MM形式にフォーマット
-  const endTimeString = end.toTimeString().slice(0, 5);
-  
-  // 終了時刻を更新
-  endTimeSelect.value = endTimeString;
-  
-  isUpdatingTime = false; // フラグをリセット
-}
-
-/**
- * 期間変更時の処理
- * 選択された期間に基づいて終了時刻を自動調整
- */
-function handleDurationChange() {
-  const startTimeSelect = document.getElementById('startTime');
-  const durationSelect = document.getElementById('duration');
-  
-  const startTime = startTimeSelect.value;
-  const duration = durationSelect.value;
-  
-  if (!startTime || !duration) {
-    return; // 開始時刻または期間が設定されていない場合は何もしない
-  }
-  
-  // 終了時刻を調整
-  adjustEndTimeBasedOnDuration(startTime, parseInt(duration));
-}
-
-// ============================================================================
-// 検証
-// ============================================================================
-
-/**
- * すべてのフォームデータを検証
- * 必須フィールド、日付範囲、時間範囲をチェック
- * @param {Object} formData - 検証するフォームデータオブジェクト
- * @returns {boolean} すべての検証が通った場合true
- */
-function validateFormData(formData) {
-  if (!isFormComplete(formData)) {
-    showStatus("必須項目をすべて入力してください", false);
+/** フォームデータを検証 */
+const validateFormData = (formData) => {
+  const basicFields = formData.eventTitle && formData.startDate && formData.endDate;
+  if (!basicFields) {
+    showStatus('必須項目をすべて入力してください', false);
     return false;
   }
-  
-  if (!isValidDateRange(formData)) {
-    showStatus("終了日は開始日より後に設定してください", false);
+  if (!formData.fullDay && (!formData.startTime || !formData.endTime || !formData.duration)) {
+    showStatus('必須項目をすべて入力してください', false);
     return false;
   }
-  
-  if (!isValidTimeRange(formData)) {
-    showStatus("終了時刻は開始時刻より後に設定してください", false);
+  if (formData.startDate > formData.endDate) {
+    showStatus('終了日は開始日より後に設定してください', false);
     return false;
   }
-  
   return true;
-}
+};
 
-/**
- * すべての必須フィールドが入力されているかチェック
- * @param {Object} formData - チェックするフォームデータオブジェクト
- * @returns {boolean} すべての必須フィールドに値がある場合true
- */
-function isFormComplete(formData) {
-  const basicFields = formData.eventTitle && 
-                     formData.startDate && 
-                     formData.endDate;
-  
-  if (formData.fullDay) {
-    // 終日イベントの場合：時間フィールドは不要
-    return basicFields;
-  } else {
-    // 通常イベントの場合：時間フィールドも必要
-    return basicFields && 
-           formData.startTime && 
-           formData.endTime && 
-           formData.duration;
-  }
-}
-
-/**
- * 終了日が開始日より前でないことを検証
- * @param {Object} formData - 検証するフォームデータオブジェクト
- * @returns {boolean} 日付範囲が有効な場合true
- */
-function isValidDateRange(formData) {
-  return formData.startDate <= formData.endDate;
-}
-
-/**
- * 同日イベントの時間範囲を検証
- * 異なる日付の場合、時間範囲は重要ではない
- * 深夜をまたぐイベント（例：23:00-00:00）も有効とする
- * @param {Object} formData - 検証するフォームデータオブジェクト
- * @returns {boolean} 時間範囲が有効な場合true
- */
-function isValidTimeRange(formData) {
-  // 終日イベントの場合：時間範囲の検証は不要
-  if (formData.fullDay) {
-    return true;
-  }
-  
-  if (formData.startDate !== formData.endDate) {
-    return true; // 異なる日付の場合、時間範囲は重要ではない
-  }
-  
-  // 同日の場合：深夜をまたぐイベントも有効とする
-  // 例：23:00-00:00 は有効（翌日の00:00まで）
-  return true;
-}
-
-// ============================================================================
-// コンテンツスクリプト通信
-// ============================================================================
-
-/**
- * フォームデータをコンテンツスクリプトに送信
- * 現在のタブをクエリし、調整さん上の場合にデータを送信
- * @param {Object} formData - コンテンツスクリプトに送信するフォームデータ
- */
-function sendDataToContentScript(formData) {
-  chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
+/** コンテンツスクリプトにデータを送信 */
+const sendDataToContentScript = (formData) => {
+  chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
     const currentUrl = tabs[0].url;
-    
-    if (isChouseisanSite(currentUrl)) {
-      sendMessageToContentScript(tabs[0].id, formData);
+    if (currentUrl?.includes(CHOUISEISAN_URL)) {
+      chrome.tabs.sendMessage(tabs[0].id, { action: 'scheduleSubmitted', data: formData }, (response) => {
+        if (chrome.runtime.lastError) {
+          const error = chrome.runtime.lastError;
+          if (error.message?.includes('Could not establish connection')) {
+            showStatus('エラー: コンテンツスクリプトが読み込まれていません。ページを更新して再試行してください。', false);
+          } else {
+            showStatus('エラー: ページとの通信に失敗しました。ページを更新してください。', false);
+          }
+        } else if (response?.success) {
+          showStatus('スケジュールが追加されました！', true);
+        } else if (response && !response.success) {
+          showStatus(`エラー: ${response.message || 'スケジュール入力欄が見つかりませんでした'}`, false);
+        } else {
+          showStatus('エラー: コンテンツスクリプトからの応答がありません', false);
+        }
+      });
     }
   });
-}
-
-/**
- * フォームデータとともにコンテンツスクリプトにメッセージを送信
- * @param {number} tabId - メッセージを送信するタブのID
- * @param {Object} formData - 送信するフォームデータ
- */
-function sendMessageToContentScript(tabId, formData) {
-  chrome.tabs.sendMessage(tabId, {
-    action: "scheduleSubmitted", 
-    data: formData
-  }, handleContentScriptResponse);
-}
-
-/**
- * コンテンツスクリプトからの応答を処理
- * 応答に基づいて適切な成功またはエラーメッセージを表示
- * @param {Object} response - コンテンツスクリプトからの応答
- */
-function handleContentScriptResponse(response) {
-  if (chrome.runtime.lastError) {
-    handleCommunicationError(chrome.runtime.lastError);
-  } else if (response && response.success) {
-    showStatus("スケジュールが追加されました！", true);
-  } else if (response && !response.success) {
-    showStatus("エラー: " + (response.message || "スケジュール入力欄が見つかりませんでした"), false);
-  } else {
-    showStatus("エラー: コンテンツスクリプトからの応答がありません", false);
-  }
-}
-
-/**
- * コンテンツスクリプトとの通信エラーを処理
- * エラータイプに基づいて適切なエラーメッセージを表示
- * @param {Error} error - chrome.runtime.lastErrorからのエラーオブジェクト
- */
-function handleCommunicationError(error) {
-  if (error.message.includes('Could not establish connection')) {
-    showStatus("エラー: コンテンツスクリプトが読み込まれていません。ページを更新して再試行してください。", false);
-  } else {
-    showStatus("エラー: ページとの通信に失敗しました。ページを更新してください。", false);
-  }
-} 
+};

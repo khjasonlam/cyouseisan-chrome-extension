@@ -3,10 +3,7 @@
   "name": "調整さん拡張機能",
   "version": "1.0.1",
   "description": "調整さんでスケジュール作成を簡単にするChrome拡張機能",
-  "permissions": [
-    "activeTab",
-    "tabs"
-  ],
+  "permissions": ["activeTab", "tabs"],
   "action": {
     "default_popup": "popup.html",
     "default_title": "調整さん拡張機能"
@@ -22,4 +19,4 @@
     "48": "icons/icon48.png",
     "128": "icons/icon128.png"
   }
-} 
+}
