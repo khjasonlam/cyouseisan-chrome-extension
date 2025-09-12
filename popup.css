@@ -1,7 +1,7 @@
 body {
   width: 450px;
-  min-height: 160px;
-  padding: 20px;
+  min-height: 180px;
+  padding: 15px;
   font-family: Arial, sans-serif;
   background-color: #fff;
   margin: 0;
@@ -16,12 +16,12 @@ body {
 }
 
 .form-group {
-  margin-bottom: 15px;
+  margin-bottom: 12px;
 }
 
 label {
   display: block;
-  margin-bottom: 5px;
+  margin-bottom: 3px;
   font-weight: bold;
   color: #333;
 }
@@ -32,7 +32,7 @@ select,
 input[type="text"], 
 textarea {
   width: 100%;
-  padding: 8px;
+  padding: 6px;
   border: 1px solid #ddd;
   border-radius: 4px;
   font-size: 14px;
@@ -62,10 +62,10 @@ button {
   background-color: #07af4a;
   color: white;
   border: none;
-  padding: 10px 20px;
+  padding: 8px 20px;
   border-radius: 5px;
   cursor: pointer;
-  margin: 5px 0;
+  margin: 3px 0;
   width: 100%;
   font-size: 14px;
 }
@@ -94,13 +94,13 @@ button:hover {
 h2 {
   text-align: center;
   color: #333;
-  margin-bottom: 20px;
+  margin-bottom: 15px;
   margin-top: 0;
 }
 
 textarea {
   resize: vertical;
-  min-height: 60px;
+  min-height: 50px;
 }
 
 .checkbox-label {
@@ -115,4 +115,32 @@ textarea {
   width: auto;
   margin-right: 8px;
   cursor: pointer;
+}
+
+.time-fields {
+  transition: opacity 0.3s ease, max-height 0.3s ease;
+  overflow: hidden;
+}
+
+.time-fields.hidden {
+  opacity: 0;
+  max-height: 0;
+  margin: 0;
+}
+
+.time-fields.visible {
+  opacity: 1;
+  max-height: 200px;
+}
+
+body.full-day-mode {
+  min-height: 160px;
+}
+
+body.time-mode {
+  min-height: 220px;
+}
+
+body.disabled-mode {
+  min-height: 120px;
 }
