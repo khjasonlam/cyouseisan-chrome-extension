@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "調整さん拡張機能",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "調整さんでスケジュール作成を簡単にするChrome拡張機能",
   "permissions": ["activeTab", "tabs"],
   "action": {
