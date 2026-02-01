@@ -27,9 +27,18 @@
 
 ```
 ├── manifest.json
-├── popup.html
-├── popup.js
-├── popup.css
-├── content.js
-└── icons/
+├── README.md
+├── js/
+│   ├── content.js
+│   └── popup.js
+├── css/
+│   └── popup.css
+├── html/
+│   └── popup.html
+├── icons/
+│   ├── icon16.png
+│   ├── icon48.png
+│   └── icon128.png
+└── tools/
+    └── create_icons.html
 ```
