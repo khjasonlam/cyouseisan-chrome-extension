@@ -6,14 +6,21 @@ const DEFAULT_DURATION = '60';
 const STATUS_DISPLAY_TIME = 3000;
 /** フォームのID */
 const FIELD_IDS = ['eventTitle', 'memo', 'startDate', 'endDate', 'startTime', 'endTime', 'duration', 'fullDay', 'overwrite', 'excludeHolidays'];
+/** 時間枠オプション */
+const DURATION_OPTIONS = [
+  { value: '30', text: '30分' },
+  { value: '60', text: '1時間' },
+  { value: '90', text: '1時間30分' },
+  { value: '120', text: '2時間' },
+];
 
 /** スケジュールフォーム */
 let scheduleForm;
 /** ステータス表示 */
 let statusDiv;
-
 /** 要素を取得 */
 const $ = (id) => document.getElementById(id);
+const formatTime = (hour) => `${hour.toString().padStart(2, '0')}:00`;
 
 /** ポップアップ初期化 */
 document.addEventListener('DOMContentLoaded', async () => {
@@ -32,14 +39,10 @@ const loadSavedValues = async () => {
     FIELD_IDS.forEach((id) => {
       const el = $(id);
       if (!el) return;
-      if (el.type === 'checkbox') {
-        if (savedData[id] !== undefined) el.checked = savedData[id];
-      } else if (savedData[id]) {
-        el.value = savedData[id];
-      }
+      el.type === 'checkbox' ? (savedData[id] !== undefined && (el.checked = savedData[id])) : savedData[id] && (el.value = savedData[id]);
     });
     setTimeMode(savedData.fullDay);
-    if (!savedData.fullDay) updateDurationOptions();
+    !savedData.fullDay && updateDurationOptions();
   } else {
     setDefaultValues();
   }
@@ -49,10 +52,9 @@ const loadSavedValues = async () => {
 const setDefaultValues = () => {
   const today = new Date().toISOString().split('T')[0];
   const hour = new Date().getHours();
-  $('startDate').value = today;
-  $('endDate').value = today;
-  $('startTime').value = `${hour.toString().padStart(2, '0')}:00`;
-  $('endTime').value = `${((hour + 1) % 24).toString().padStart(2, '0')}:00`;
+  $('startDate').value = $('endDate').value = today;
+  $('startTime').value = formatTime(hour);
+  $('endTime').value = formatTime((hour + 1) % 24);
   $('duration').value = DEFAULT_DURATION;
   setTimeMode(false);
 };
@@ -60,10 +62,8 @@ const setDefaultValues = () => {
 /** 時間ドロップダウンを30分間隔で生成 */
 const populateTimeDropdowns = () => {
   const placeholder = '<option value="">時刻を選択</option>';
-  const startSelect = $('startTime');
-  const endSelect = $('endTime');
-  startSelect.innerHTML = placeholder;
-  endSelect.innerHTML = placeholder;
+  const [startSelect, endSelect] = [$('startTime'), $('endTime')];
+  startSelect.innerHTML = endSelect.innerHTML = placeholder;
   for (let hour = 0; hour < 24; hour++) {
     const hourStr = hour.toString().padStart(2, '0');
     ['00', '30'].forEach((min) => {
@@ -79,13 +79,10 @@ const populateTimeDropdowns = () => {
 const setupEventListeners = () => {
   scheduleForm.addEventListener('submit', handleFormSubmission);
   $('fullDay').addEventListener('change', handleFullDayToggle);
-  $('startTime').addEventListener('change', updateDurationOptions);
-  $('endTime').addEventListener('change', updateDurationOptions);
+  ['startTime', 'endTime'].forEach((id) => $(id).addEventListener('change', updateDurationOptions));
   FIELD_IDS.forEach((id) => {
     const field = $(id);
-    if (field) {
-      field.addEventListener(field.type === 'checkbox' ? 'change' : 'input', saveFormValues);
-    }
+    field && field.addEventListener(field.type === 'checkbox' ? 'change' : 'input', saveFormValues);
   });
 };
 
@@ -93,12 +90,7 @@ const setupEventListeners = () => {
 const handleFullDayToggle = () => {
   const isFullDay = $('fullDay').checked;
   setTimeMode(isFullDay);
-  if (isFullDay) {
-    ['startTime', 'endTime', 'duration'].forEach((id) => $(id).value = '');
-  } else {
-    resetTimeFields();
-    updateDurationOptions();
-  }
+  isFullDay ? ['startTime', 'endTime', 'duration'].forEach((id) => $(id).value = '') : (resetTimeFields(), updateDurationOptions());
   saveFormValues();
 };
 
@@ -114,8 +106,8 @@ const setTimeMode = (isFullDay) => {
 /** 時間フィールドをデフォルト値にリセット */
 const resetTimeFields = () => {
   const hour = new Date().getHours();
-  $('startTime').value = `${hour.toString().padStart(2, '0')}:00`;
-  $('endTime').value = `${((hour + 1) % 24).toString().padStart(2, '0')}:00`;
+  $('startTime').value = formatTime(hour);
+  $('endTime').value = formatTime((hour + 1) % 24);
   $('duration').value = DEFAULT_DURATION;
 };
 
@@ -135,7 +127,7 @@ const checkCurrentSite = () => {
       scheduleForm.style.display = 'block';
       document.body.classList.remove('disabled-mode');
       setTimeMode($('fullDay').checked);
-      if (!$('fullDay').checked) updateDurationOptions();
+      !$('fullDay').checked && updateDurationOptions();
     } else {
       scheduleForm.style.display = 'none';
       document.body.classList.add('disabled-mode');
@@ -172,24 +164,17 @@ const calculateTotalTimeMinutes = (startTime, endTime) => {
   const start = new Date(`2000-01-01T${startTime}`);
   let end = new Date(`2000-01-01T${endTime}`);
   if (start >= end) end.setDate(end.getDate() + 1);
-  return (end.getTime() - start.getTime()) / (1000 * 60);
+  return (end.getTime() - start.getTime()) / 60000;
 };
 
 /** 利用可能な時間枠オプションを取得 */
 const getAvailableDurationOptions = (totalMinutes) => {
-  const options = [
-    { value: '30', text: '30分' },
-    { value: '60', text: '1時間' },
-    { value: '90', text: '1時間30分' },
-    { value: '120', text: '2時間' },
-  ];
-  return totalMinutes === 0 ? options : options.filter((opt) => parseInt(opt.value) <= totalMinutes);
+  return totalMinutes === 0 ? DURATION_OPTIONS : DURATION_OPTIONS.filter((opt) => parseInt(opt.value) <= totalMinutes);
 };
 
 /** 時間枠オプションを更新 */
 const updateDurationOptions = () => {
-  const startTime = $('startTime').value;
-  const endTime = $('endTime').value;
+  const [startTime, endTime] = [$('startTime').value, $('endTime').value];
   const durationSelect = $('duration');
   const currentDuration = durationSelect.value;
   const totalMinutes = calculateTotalTimeMinutes(startTime, endTime);
@@ -199,44 +184,30 @@ const updateDurationOptions = () => {
   if (currentDuration && availableOptions.some((opt) => opt.value === currentDuration)) {
     durationSelect.value = currentDuration;
   } else if (currentDuration) {
-    smartAdjustDuration();
+    const selected = availableOptions.find((opt) => opt.value === '60') || availableOptions[availableOptions.length - 1];
+    durationSelect.value = selected?.value || '';
   } else {
     durationSelect.value = '';
   }
 };
 
-/** 時間枠を自動調整 */
-const smartAdjustDuration = () => {
-  const startTime = $('startTime').value;
-  const endTime = $('endTime').value;
-  if (!startTime || !endTime) return;
-  const totalMinutes = calculateTotalTimeMinutes(startTime, endTime);
-  const availableOptions = getAvailableDurationOptions(totalMinutes);
-  if (availableOptions.length === 0) return;
-  const selected = availableOptions.find((opt) => opt.value === '60') || availableOptions[availableOptions.length - 1];
-  $('duration').value = selected.value;
-};
-
 /** フォームデータを検証 */
 const validateFormData = (data) => {
   if (!data.eventTitle || !data.startDate || !data.endDate) {
-    showStatus('必須項目をすべて入力してください', false);
-    return false;
+    return showStatus('必須項目をすべて入力してください', false), false;
   }
   if (!data.fullDay && (!data.startTime || !data.endTime || !data.duration)) {
-    showStatus('必須項目をすべて入力してください', false);
-    return false;
+    return showStatus('必須項目をすべて入力してください', false), false;
   }
   if (data.startDate > data.endDate) {
-    showStatus('終了日は開始日より後に設定してください', false);
-    return false;
+    return showStatus('終了日は開始日より後に設定してください', false), false;
   }
   return true;
 };
 
 /** フォームの値を保存 */
 const saveFormValues = () => {
-  chrome.storage.local.set({ formData: getFormData() }).catch(() => { });
+  chrome.storage.local.set({ formData: getFormData() });
 };
 
 /** コンテンツスクリプトにデータを送信 */
@@ -251,12 +222,8 @@ const sendDataToContentScript = (formData) => {
         showStatus(msg, false);
       } else if (response?.success) {
         showStatus('スケジュールが追加されました！', true);
-        chrome.storage.local.remove('formData').catch(() => { });
-        setDefaultValues();
-      } else if (response && !response.success) {
-        showStatus(`エラー: ${response.message || 'スケジュール入力欄が見つかりませんでした'}`, false);
       } else {
-        showStatus('エラー: コンテンツスクリプトからの応答がありません', false);
+        showStatus(`エラー: ${response?.message || 'スケジュール入力欄が見つかりませんでした'}`, false);
       }
     });
   });
