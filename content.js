@@ -6,7 +6,6 @@ const BASIC_REQUIRED_FIELDS = ['eventTitle', 'startDate', 'endDate'];
 const TIME_REQUIRED_FIELDS = ['startTime', 'endTime', 'duration'];
 /** 祝日APIのベースURL */
 const HOLIDAYS_API_BASE_URL = 'https://holidays-jp.shogo82148.com';
-
 /** 祝日キャッシュ */
 const holidayCache = {};
 
@@ -28,124 +27,80 @@ const handleScheduleSubmission = async (scheduleData, sendResponse) => {
   }
   const missingFields = getMissingFields(scheduleData);
   if (missingFields.length > 0) {
-    sendResponse({
-      success: false,
-      message: `必須フィールドが不足しています: ${missingFields.join(', ')}`,
-    });
+    sendResponse({ success: false, message: `必須フィールドが不足しています: ${missingFields.join(', ')}` });
     return;
   }
-  const formElements = findFormElements();
-  const result = await fillFormElements(formElements, scheduleData);
-  sendResponse(createResponse(result, formElements));
-};
-
-/** 不足している必須フィールドを取得 */
-const getMissingFields = (scheduleData) => {
-  const missingBasicFields = BASIC_REQUIRED_FIELDS.filter((field) => !scheduleData[field]);
-  if (!scheduleData.fullDay) {
-    const missingTimeFields = TIME_REQUIRED_FIELDS.filter((field) => !scheduleData[field]);
-    return [...missingBasicFields, ...missingTimeFields];
-  }
-  return missingBasicFields;
-};
-
-/** レスポンスオブジェクトを作成 */
-const createResponse = (result, formElements) => {
-  const kouhoFilled = formElements.kouhoTextarea && result.successCount > 0;
-  if (kouhoFilled) {
-    const successMessage =
-      result.successCount === result.totalFields
-        ? 'すべての項目が正常に入力されました！'
-        : `${result.totalFields}個中${result.successCount}個の項目が正常に入力されました`;
-    return { success: true, message: successMessage };
-  } else {
-    return createErrorResponse(formElements);
-  }
-};
-
-/** エラーレスポンスを作成 */
-const createErrorResponse = (formElements) => {
-  const elementsExist = formElements.nameInput || formElements.commentInput || formElements.kouhoTextarea;
-  if (!elementsExist) {
-    return {
-      success: false,
-      message: '調整さんの入力欄が見つかりませんでした。ページが正しく読み込まれているか確認してください。',
-    };
-  } else {
-    return {
-      success: false,
-      message: 'スケジュールの入力に失敗しました。データを確認してください。',
-    };
-  }
-};
-
-/** フォーム要素を検索 */
-const findFormElements = () => {
-  return {
+  const elements = {
     nameInput: document.getElementById('name'),
     commentInput: document.getElementById('comment'),
     kouhoTextarea: document.getElementById('kouho'),
   };
+  const result = await fillFormElements(elements, scheduleData);
+  sendResponse(createResponse(result, elements));
+};
+
+/** 不足している必須フィールドを取得 */
+const getMissingFields = (data) => {
+  const missing = BASIC_REQUIRED_FIELDS.filter((field) => !data[field]);
+  if (!data.fullDay) {
+    missing.push(...TIME_REQUIRED_FIELDS.filter((field) => !data[field]));
+  }
+  return missing;
+};
+
+/** レスポンスオブジェクトを作成 */
+const createResponse = (result, elements) => {
+  if (elements.kouhoTextarea && result.successCount > 0) {
+    const message = result.successCount === result.totalFields
+      ? 'すべての項目が正常に入力されました！'
+      : `${result.totalFields}個中${result.successCount}個の項目が正常に入力されました`;
+    return { success: true, message };
+  }
+  const elementsExist = elements.nameInput || elements.commentInput || elements.kouhoTextarea;
+  return {
+    success: false,
+    message: elementsExist
+      ? 'スケジュールの入力に失敗しました。データを確認してください。'
+      : '調整さんの入力欄が見つかりませんでした。ページが正しく読み込まれているか確認してください。',
+  };
 };
 
 /** フォーム要素を入力 */
-const fillFormElements = async (elements, scheduleData) => {
+const fillFormElements = async (elements, data) => {
   let successCount = 0;
-  let totalFields = 0;
-  // 名前フィールド
-  if (elements.nameInput) {
-    fillInputElement(elements.nameInput, scheduleData.eventTitle);
-    successCount++;
+  const fields = [
+    () => elements.nameInput && fillInputElement(elements.nameInput, data.eventTitle),
+    () => elements.commentInput && fillInputElement(elements.commentInput, data.memo || ''),
+    () => elements.kouhoTextarea && fillScheduleTextarea(elements.kouhoTextarea, data),
+  ];
+  for (const field of fields) {
+    if (await field()) successCount++;
   }
-  totalFields++;
-  // コメントフィールド
-  if (elements.commentInput) {
-    fillInputElement(elements.commentInput, scheduleData.memo || '');
-    successCount++;
-  }
-  totalFields++;
-  // 候補日フィールド
-  if (elements.kouhoTextarea) {
-    await fillScheduleTextarea(elements.kouhoTextarea, scheduleData);
-    successCount++;
-  }
-  totalFields++;
-  return { successCount, totalFields };
+  return { successCount, totalFields: fields.length };
 };
 
 /** スケジュールテキストエリアを入力 */
-const fillScheduleTextarea = async (textarea, scheduleData) => {
-  const formattedSchedule = await formatScheduleForChouseisan(scheduleData);
-  if (scheduleData.overwrite) {
-    fillInputElement(textarea, formattedSchedule);
-  } else {
-    const existingContent = textarea.value || '';
-    const newContent = existingContent ? existingContent + '\n' + formattedSchedule : formattedSchedule;
-    fillInputElement(textarea, newContent);
-  }
+const fillScheduleTextarea = async (textarea, data) => {
+  const formatted = await formatScheduleForChouseisan(data);
+  const content = data.overwrite ? formatted : (textarea.value ? `${textarea.value}\n${formatted}` : formatted);
+  fillInputElement(textarea, content);
+  return true;
 };
 
 /** 入力要素に値を設定 */
 const fillInputElement = (element, value) => {
   element.value = value;
-  const inputEvent = new Event('input', { bubbles: true });
-  element.dispatchEvent(inputEvent);
+  element.dispatchEvent(new Event('input', { bubbles: true }));
+  return true;
 };
 
 /** 調整さん用にスケジュールをフォーマット */
-const formatScheduleForChouseisan = async (scheduleData) => {
-  const { startDate, endDate, startTime, endTime, duration, fullDay, excludeHolidays } = scheduleData;
-  const parsedStartDate = new Date(startDate);
-  const parsedEndDate = new Date(endDate);
-  if (fullDay) {
-    const scheduleLines = await generateFullDaySchedule(parsedStartDate, parsedEndDate, excludeHolidays);
-    return scheduleLines.join('\n');
-  } else {
-    const parsedDuration = parseInt(duration);
-    const timeSlots = generateTimeSlots(startTime, endTime, parsedDuration);
-    const scheduleLines = await generateScheduleLines(parsedStartDate, parsedEndDate, timeSlots, excludeHolidays);
-    return scheduleLines.join('\n');
-  }
+const formatScheduleForChouseisan = async (data) => {
+  const startDate = new Date(data.startDate);
+  const endDate = new Date(data.endDate);
+  const timeSlots = data.fullDay ? null : generateTimeSlots(data.startTime, data.endTime, parseInt(data.duration));
+  const lines = await generateScheduleLines(startDate, endDate, timeSlots, data.excludeHolidays);
+  return lines.join('\n');
 };
 
 /** 時間スロットを生成 */
@@ -153,16 +108,12 @@ const generateTimeSlots = (startTime, endTime, durationMinutes) => {
   const slots = [];
   const start = new Date(`2000-01-01T${startTime}`);
   let end = new Date(`2000-01-01T${endTime}`);
-  if (start >= end) {
-    end.setDate(end.getDate() + 1);
-  }
+  if (start >= end) end.setDate(end.getDate() + 1);
   let current = new Date(start);
   while (current < end) {
-    const slotStart = formatTime(current);
-    const slotEndTime = new Date(current.getTime() + durationMinutes * 60000);
-    if (slotEndTime <= end) {
-      const slotEnd = formatTime(slotEndTime);
-      slots.push(`${slotStart} ~ ${slotEnd}`);
+    const slotEnd = new Date(current.getTime() + durationMinutes * 60000);
+    if (slotEnd <= end) {
+      slots.push(`${formatTime(current)} ~ ${formatTime(slotEnd)}`);
     }
     current.setMinutes(current.getMinutes() + durationMinutes);
   }
@@ -171,131 +122,61 @@ const generateTimeSlots = (startTime, endTime, durationMinutes) => {
 
 /** スケジュール行を生成 */
 const generateScheduleLines = async (startDate, endDate, timeSlots, excludeHolidays = false) => {
-  const scheduleLines = [];
-  if (isSameDate(startDate, endDate)) {
-    if (!excludeHolidays || !(await isWeekendOrHoliday(startDate))) {
-      const dateStr = formatJapaneseDate(startDate);
-      timeSlots.forEach((slot) => {
-        scheduleLines.push(`${dateStr} ${slot}`);
-      });
-    }
-  } else {
-    await generateMultiDaySchedule(startDate, endDate, timeSlots, scheduleLines, excludeHolidays);
-  }
-  return scheduleLines;
-};
-
-/** 2つの日付が同じかチェック */
-const isSameDate = (date1, date2) => {
-  return date1.toDateString() === date2.toDateString();
-};
-
-/** 複数日のスケジュールを生成 */
-const generateMultiDaySchedule = async (startDate, endDate, timeSlots, scheduleLines, excludeHolidays = false) => {
+  const lines = [];
   const currentDate = new Date(startDate);
   const lastDate = new Date(endDate);
   while (currentDate <= lastDate) {
     if (!excludeHolidays || !(await isWeekendOrHoliday(currentDate))) {
       const dateStr = formatJapaneseDate(currentDate);
-      timeSlots.forEach((slot) => {
-        scheduleLines.push(`${dateStr} ${slot}`);
-      });
+      if (timeSlots) {
+        timeSlots.forEach((slot) => lines.push(`${dateStr} ${slot}`));
+      } else {
+        lines.push(dateStr);
+      }
     }
     currentDate.setDate(currentDate.getDate() + 1);
   }
-};
-
-/** 終日スケジュールを生成 */
-const generateFullDaySchedule = async (startDate, endDate, excludeHolidays = false) => {
-  const scheduleLines = [];
-  if (isSameDate(startDate, endDate)) {
-    if (!excludeHolidays || !(await isWeekendOrHoliday(startDate))) {
-      const dateStr = formatJapaneseDate(startDate);
-      scheduleLines.push(dateStr);
-    }
-  } else {
-    const currentDate = new Date(startDate);
-    const lastDate = new Date(endDate);
-    while (currentDate <= lastDate) {
-      if (!excludeHolidays || !(await isWeekendOrHoliday(currentDate))) {
-        const dateStr = formatJapaneseDate(currentDate);
-        scheduleLines.push(dateStr);
-      }
-      currentDate.setDate(currentDate.getDate() + 1);
-    }
-  }
-  return scheduleLines;
+  return lines;
 };
 
 /** 時間をフォーマット (HH:MM) */
-const formatTime = (time) => {
-  return time.toTimeString().slice(0, 5);
-};
-
-/** 日本語の曜日を取得 */
-const getJapaneseWeekday = (date) => {
-  return JAPANESE_WEEKDAYS[date.getDay()];
-};
+const formatTime = (time) => time.toTimeString().slice(0, 5);
 
 /** 日本語の日付をフォーマット (M/D(曜日)) */
 const formatJapaneseDate = (date) => {
   const month = date.getMonth() + 1;
   const day = date.getDate();
-  const weekday = getJapaneseWeekday(date);
+  const weekday = JAPANESE_WEEKDAYS[date.getDay()];
   return `${month}/${day}(${weekday})`;
 };
 
 /** 土日祝日かチェック */
 const isWeekendOrHoliday = async (date) => {
-  const isWeekendDay = isWeekend(date);
-  const isHoliday = await isJapaneseHoliday(date);
-  return isWeekendDay || isHoliday;
-};
-
-/** 土日かチェック */
-const isWeekend = (date) => {
-  const dayOfWeek = date.getDay();
-  return dayOfWeek === 0 || dayOfWeek === 6;
+  const day = date.getDay();
+  if (day === 0 || day === 6) return true;
+  return await isJapaneseHoliday(date);
 };
 
 /** 日本の祝日かチェック */
 const isJapaneseHoliday = async (date) => {
   const dateString = formatDateString(date);
   const year = date.getFullYear();
-  try {
-    const holidays = await getHolidaysForYear(year);
-    return holidays.includes(dateString);
-  } catch (error) {
-    console.warn('祝日データの取得に失敗しました:', error);
-    return false;
-  }
+  const holidays = await getHolidaysForYear(year);
+  return holidays.includes(dateString);
 };
 
 /** 年の祝日データを取得 */
 const getHolidaysForYear = async (year) => {
-  if (holidayCache[year]) {
-    return holidayCache[year];
-  }
+  if (holidayCache[year]) return holidayCache[year];
   try {
     const response = await fetch(`${HOLIDAYS_API_BASE_URL}/${year}`);
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
+    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
     const data = await response.json();
-    let holidays = [];
-    if (data?.holidays && Array.isArray(data.holidays)) {
-      holidays = data.holidays.map((holiday) => holiday.date);
-    } else if (Array.isArray(data)) {
-      holidays = data.map((holiday) => holiday.date || holiday);
-    } else if (typeof data === 'object' && data !== null) {
-      holidays = Object.keys(data);
-    } else {
-      console.warn(`予期しないAPIレスポンス形式: ${typeof data}`);
-    }
+    const holidays = data?.holidays?.map((h) => h.date) || (Array.isArray(data) ? data.map((h) => h.date || h) : (typeof data === 'object' && data !== null ? Object.keys(data) : []));
     holidayCache[year] = holidays;
     return holidays;
-  } catch (error) {
-    console.error(`祝日データの取得に失敗しました (${year}年):`, error);
+  } catch {
+    console.error(`祝日データの取得に失敗しました (${year}年)`);
     return [];
   }
 };
