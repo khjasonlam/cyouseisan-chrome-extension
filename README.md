@@ -20,7 +20,7 @@
 ## 使用方法
 
 1. [調整さん](https://chouseisan.com/)にアクセス
-2. 拡張機能アイコンをクリック
+2. 拡張機能アイコンをクリックしてサイドバーを開く
 3. フォームに入力して「スケジュールを送信」をクリック
 
 ## ファイル構成
@@ -29,12 +29,13 @@
 ├── manifest.json
 ├── README.md
 ├── js/
+│   ├── background.js
 │   ├── content.js
-│   └── popup.js
+│   └── sidebar.js
 ├── css/
-│   └── popup.css
+│   └── sidebar.css
 ├── html/
-│   └── popup.html
+│   └── sidebar.html
 ├── icons/
 │   ├── icon16.png
 │   ├── icon48.png

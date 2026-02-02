@@ -22,13 +22,14 @@ let statusDiv;
 const $ = (id) => document.getElementById(id);
 const formatTime = (hour) => `${hour.toString().padStart(2, '0')}:00`;
 
-/** ポップアップ初期化 */
+/** サイドバー初期化 */
 document.addEventListener('DOMContentLoaded', async () => {
   scheduleForm = $('scheduleForm');
   statusDiv = $('status');
   await loadSavedValues();
   setupEventListeners();
   checkCurrentSite();
+  setupTabChangeListeners();
 });
 
 /** 保存された値を読み込んで復元 */
@@ -119,10 +120,24 @@ const showStatus = (message, isSuccess = true) => {
   setTimeout(() => (statusDiv.style.display = 'none'), STATUS_DISPLAY_TIME);
 };
 
+/** 既存のメッセージを削除 */
+const removeExistingMessage = () => {
+  const container = document.querySelector('.container');
+  if (!container) return;
+  const existingMsg = container.querySelector('.disabled-message');
+  if (existingMsg) {
+    existingMsg.remove();
+  }
+};
+
 /** 現在のサイトが調整さんかチェック */
 const checkCurrentSite = () => {
   chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-    const isChouseisan = tabs[0].url?.includes(CHOUISEISAN_URL);
+    if (!tabs || tabs.length === 0 || !tabs[0].url) {
+      return;
+    }
+    const isChouseisan = tabs[0].url.includes(CHOUISEISAN_URL);
+    removeExistingMessage();
     if (isChouseisan) {
       scheduleForm.style.display = 'block';
       document.body.classList.remove('disabled-mode');
@@ -133,9 +148,25 @@ const checkCurrentSite = () => {
       document.body.classList.add('disabled-mode');
       document.body.classList.remove('full-day-mode', 'time-mode');
       const msg = document.createElement('div');
-      msg.style.cssText = 'text-align: center; padding: 15px; color: #666; font-size: 14px;';
+      msg.className = 'disabled-message';
       msg.innerHTML = '<p>この拡張機能は<strong>調整さん</strong>でのみ動作します</p><p><a href="https://chouseisan.com/" target="_blank">調整さん</a>にアクセスして拡張機能をご利用ください。</p>';
       document.querySelector('.container')?.appendChild(msg);
+    }
+  });
+};
+
+/** タブ切り替えを監視 */
+const setupTabChangeListeners = () => {
+  chrome.tabs.onActivated.addListener(() => {
+    checkCurrentSite();
+  });
+  chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
+    if (changeInfo.status === 'complete' || changeInfo.url) {
+      chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+        if (tabs && tabs.length > 0 && tabs[0].id === tabId) {
+          checkCurrentSite();
+        }
+      });
     }
   });
 };
