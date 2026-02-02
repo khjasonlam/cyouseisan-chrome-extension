@@ -1,12 +1,17 @@
 {
   "manifest_version": 3,
   "name": "調整さん拡張機能",
-  "version": "1.1.0",
+  "version": "2.0.0",
   "description": "調整さんでスケジュール作成を簡単にするChrome拡張機能",
-  "permissions": ["activeTab", "tabs", "storage"],
+  "permissions": ["activeTab", "tabs", "storage", "sidePanel"],
   "action": {
-    "default_popup": "html/popup.html",
     "default_title": "調整さん拡張機能"
+  },
+  "side_panel": {
+    "default_path": "html/sidebar.html"
+  },
+  "background": {
+    "service_worker": "js/background.js"
   },
   "content_scripts": [
     {
